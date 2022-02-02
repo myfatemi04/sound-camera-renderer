@@ -1,23 +1,29 @@
 import logo from './logo.svg';
 import './App.css';
+import { useEffect, useState } from 'react';
+import { Canvas } from 'react-three-fiber';
 
 function App() {
+  const [rotation, setRotation] = useState(0);
+
+  useEffect(() => {
+    const rotationTimerId = setInterval(() => {
+      setRotation(r => r + 0.01);
+    }, 10);
+
+    return () => clearInterval(rotationTimerId)
+  }, [])
+
   return (
     <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+      <Canvas style={{ height: 600, backgroundColor: "black" }}>
+        <pointLight position={[10, 10, 10]} />
+        <ambientLight />
+        <mesh rotation={[rotation, rotation, 0]}>
+          <meshStandardMaterial color="red" />
+          <boxBufferGeometry attach="geometry" args={[1, 1, 1]} />
+        </mesh>
+      </Canvas>
     </div>
   );
 }
