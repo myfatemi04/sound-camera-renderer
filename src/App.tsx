@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import { Camera, Canvas } from "react-three-fiber";
-import { Vector3 } from "three";
+import { Euler, Vector3 } from "three";
 import "./App.css";
 
 function Line({
@@ -75,6 +75,9 @@ function App() {
   useEffect(() => {
     const orientationListener = (e: DeviceOrientationEvent) => {
       const { alpha, beta, gamma } = e;
+      if (alpha && beta && gamma) {
+        cameraRef.current?.setRotationFromEuler(new Euler(alpha, beta, gamma));
+      }
       document.getElementById(
         "orientation"
       )!.innerHTML = `Orientation: ${alpha} ${beta} ${gamma}`;
@@ -119,7 +122,7 @@ function App() {
 
   return (
     <div className="App">
-      {false && (
+      {true && (
         <>
           {orientationPermission == null && (
             <button onClick={requestPermission}>
