@@ -6,8 +6,8 @@ import {
 	useRef,
 	useState,
 } from 'react';
-import { Camera, Canvas } from 'react-three-fiber';
-import { Euler, Vector3 } from 'three';
+import { Canvas } from 'react-three-fiber';
+import { PerspectiveCamera, Vector3 } from 'three';
 import './App.css';
 import Gate from './Gate';
 import isMobileDevice from './isMobileDevice';
@@ -37,7 +37,7 @@ function Grid() {
 	// This renders a grid on the floor
 	const gridSize = 10;
 	const gridRadius = gridSize / 2;
-	const y = -1;
+	const y = -0.5;
 	return (
 		<>
 			{/* Horizontal lines */}
@@ -76,7 +76,7 @@ const mobile = isMobileDevice();
 
 function App() {
 	const [rotation, setRotation] = useState(0);
-	const cameraRef = useRef<Camera>();
+	const [camera] = useState(() => new PerspectiveCamera());
 
 	const [ip, setIp] = useState<string>('');
 	const websocketRef = useRef<WebSocket>();
@@ -126,9 +126,9 @@ function App() {
 	useEffect(() => {
 		const listener = (e: DeviceOrientationEvent) => {
 			const { alpha, beta, gamma } = e;
-			if (alpha && beta && gamma) {
-				cameraRef.current?.setRotationFromEuler(new Euler(alpha, beta, gamma));
-			}
+			// if (alpha && beta && gamma) {
+			// 	camera.setRotationFromEuler(new Euler(alpha, beta, gamma));
+			// }
 			const orientationElement = document.getElementById('orientation')!;
 
 			if (alpha !== null) {
@@ -174,6 +174,17 @@ function App() {
 		}
 	}, []);
 
+	const canvasRef = useRef<HTMLCanvasElement>(null);
+
+	camera.fov = 135;
+	camera.position.set(0, 0, 2);
+	if (canvasRef.current) {
+		const canvas = canvasRef.current;
+		const rect = canvas.getBoundingClientRect();
+		camera.aspect = rect.width / rect.height;
+		camera.updateProjectionMatrix();
+	}
+
 	return (
 		<div className='App'>
 			<div style={{ display: 'flex' }}>
@@ -190,35 +201,46 @@ function App() {
 			</Gate>
 			<Canvas
 				style={{ height: 600, backgroundColor: 'black' }}
-				camera={cameraRef.current}
+				camera={camera}
+				ref={canvasRef}
 			>
-				<perspectiveCamera ref={cameraRef} position={[0, 0, 0]} />
 				<Grid />
 
 				{soundSourceLocalizations.map(
 					({ x, y, z, E }, idx) =>
-						E > 0.2 && (
-							<mesh position={[x, y, z]} key={idx}>
-								<meshStandardMaterial color={`rgba(255, 255, 255, ${E})`} />
+						E > 0.1 && (
+							<mesh position={[x * 4, y * 4 - 0.5, 0]} key={idx}>
+								<meshStandardMaterial
+									color={`rgba(${Math.min(
+										255,
+										Math.floor(E * 255 * 3)
+									)}, 0, 255, 0.2)`}
+									// color={`rgba(${E * 255}, 255, 255, ${E})`}
+								/>
 								{/* sphereBufferGeometry args: [radius, widthSegments, heightSegments] */}
-								<sphereBufferGeometry attach='geometry' args={[0.1, 32, 32]} />
+								<sphereBufferGeometry
+									attach='geometry'
+									args={[E * E, 32, 32]}
+								/>
 							</mesh>
 						)
 				)}
 
 				<Gate active={mobile}>
-					<DeviceOrientationControls camera={cameraRef.current} />
+					<DeviceOrientationControls camera={camera} />
 				</Gate>
 				<Gate active={!mobile}>
-					<OrbitControls camera={cameraRef.current} />
+					<OrbitControls camera={camera} />
 				</Gate>
 
 				<pointLight position={[10, 10, 10]} />
 				<ambientLight />
-				<mesh rotation={[rotation, rotation, 0]} position={[0, -1, 0]}>
-					<meshStandardMaterial color='red' />
-					<boxBufferGeometry attach='geometry' args={[1, 1, 1]} />
-				</mesh>
+				<Gate>
+					<mesh rotation={[rotation, rotation, 0]} position={[0, 0, 0]}>
+						<meshStandardMaterial color='red' />
+						<boxBufferGeometry attach='geometry' args={[0.5, 0.5, 0.5]} />
+					</mesh>
+				</Gate>
 			</Canvas>
 		</div>
 	);
