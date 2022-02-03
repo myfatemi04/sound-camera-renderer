@@ -1,0 +1,5 @@
+You may need to install CloudFlare Tunnels to run the server over an HTTPS conection.
+To do this, install the CloudFlare Tunnels CLI (brew install cloudflare/cloudflare/cloudflared)
+Then, run `cloudflared tunnel --url http://localhost:3000` (or whatever port you're using)
+
+Finally, you can open it on Safari on your iPhone. Just make sure you use the https: version of the Cloudflare Tunnel.
