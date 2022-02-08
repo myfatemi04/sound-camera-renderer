@@ -6,18 +6,13 @@ import './App.css';
 import Gate from './Gate';
 import Grid from './Grid';
 import isMobileDevice from './isMobileDevice';
-
-type SoundSourceLocation = {
-	x: number;
-	y: number;
-	z: number;
-	E: number;
-};
-
-type SoundSourceLocalizationPacket = {
-	timeStamp: number;
-	src: SoundSourceLocation[];
-};
+import nonMaximumSuppression from './nonMaximumSuppression';
+import {
+	SoundSourceLocalizationPacket,
+	SoundSourceLocalizationWithDate,
+} from './types';
+import useOrientationPermissionState from './useOrientationPermissionState';
+import useRollingArray from './useRollingArray';
 
 const mobile = isMobileDevice();
 const maxSoundSourceLocalizationEvents = 20;
@@ -28,18 +23,9 @@ function App() {
 	const [ip, setIp] = useState<string>('');
 	const websocketRef = useRef<WebSocket>();
 
-	type SoundSourceLocalizationEvent = {
-		localizations: SoundSourceLocation[];
-		date: number;
-	};
-
-	const [soundSourceLocalizationEvents, setSoundSourceLocalizations] = useState<
-		(SoundSourceLocalizationEvent | null)[]
-	>([]);
-	const [
-		_soundSourceLocalizationEventCounter,
-		setSoundSourceLocalizationEventCounter,
-	] = useState(0);
+	const localizations = useRollingArray<SoundSourceLocalizationWithDate>(
+		maxSoundSourceLocalizationEvents
+	);
 
 	const confirmIp = useCallback(() => {
 		if (websocketRef.current) {
@@ -51,17 +37,10 @@ function App() {
 			try {
 				const json = JSON.parse(event.data) as SoundSourceLocalizationPacket;
 				const date = Date.now();
-
-				const energySquared = json.src.map(src => src.E * src.E);
-				if (Math.max(...energySquared) > 0.1) {
-					setSoundSourceLocalizationEventCounter(counter => {
-						setSoundSourceLocalizations(localizations => {
-							const clone = [...localizations];
-							clone[counter] = { localizations: json.src, date };
-							return clone;
-						});
-						return (counter + 1) % maxSoundSourceLocalizationEvents;
-					});
+				for (const src of json.src) {
+					if (src.E * src.E > 0.1) {
+						localizations.addItem({ date, ...src });
+					}
 				}
 			} catch (e) {
 				if (!didError) {
@@ -76,7 +55,7 @@ function App() {
 				}
 			}
 		};
-	}, [ip]);
+	}, [ip, localizations]);
 
 	// Orientation listener
 	useEffect(() => {
@@ -95,32 +74,8 @@ function App() {
 		};
 	}, []);
 
-	const [orientationPermission, setOrientationPermission] =
-		useState<boolean | null>(null);
-
-	const requestPermission = useCallback(async () => {
-		// DeviceOrientationEvent.requestPermission is an experimental feature that is only available
-		// on iOS 14.5 and above.
-		// @ts-ignore
-		if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-			try {
-				const permissionState =
-					// @ts-ignore
-					await DeviceOrientationEvent.requestPermission();
-
-				if (permissionState === 'granted') {
-					setOrientationPermission(true);
-				} else {
-					// Denied
-					const el = document.getElementById('error')!;
-					el.innerHTML = `Orientation permission state: ${permissionState}`;
-					setOrientationPermission(false);
-				}
-			} catch (e) {
-				setOrientationPermission(false);
-			}
-		}
-	}, []);
+	const { orientationPermission, requestOrientation } =
+		useOrientationPermissionState();
 
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -133,13 +88,14 @@ function App() {
 		camera.updateProjectionMatrix();
 	}
 
-	const timestamps = soundSourceLocalizationEvents
+	const timestamps = localizations.items
 		.filter(e => e !== null)
 		.map(e => e!.date);
 
 	const oldestTimestamp = Math.min(...timestamps);
 	const newestTimestamp = Math.max(...timestamps);
 	const elapsedTime = newestTimestamp - oldestTimestamp;
+	const suppressedItems = nonMaximumSuppression(localizations.items, 0.2);
 
 	return (
 		<div className='App'>
@@ -149,11 +105,11 @@ function App() {
 			</div>
 			<Gate active>
 				{orientationPermission == null && (
-					<button onClick={requestPermission}>
+					<button onClick={requestOrientation}>
 						Request permission for orientation
 					</button>
 				)}
-				<div id='orientation'>Orientation: </div>
+				<div id='orientation'>Orientation: Unknown</div>
 			</Gate>
 			<Canvas
 				style={{ height: 600, backgroundColor: 'black' }}
@@ -162,31 +118,28 @@ function App() {
 			>
 				<Grid />
 
-				{soundSourceLocalizationEvents.map(event =>
-					event?.localizations.map(
-						({ x, y, z, E }, idx) =>
-							E * E > 0.1 && (
-								<mesh position={[x * 4, y * 4 - 0.5, 0]} key={idx}>
-									<meshStandardMaterial
-										transparent
-										opacity={
-											// Fade out the sound source after a certain amount of time
-											(event.date - oldestTimestamp) / elapsedTime
-										}
-										color={`rgb(${Math.min(
-											255,
-											Math.floor(E * 255 * 3)
-										)}, 0, 255)`}
-										// color={`rgba(${E * 255}, 255, 255, ${E})`}
-									/>
-									{/* sphereBufferGeometry args: [radius, widthSegments, heightSegments] */}
-									<sphereBufferGeometry
-										attach='geometry'
-										args={[E * E, 32, 32]}
-									/>
-								</mesh>
-							)
-					)
+				{suppressedItems.map(
+					({ x, y, z, E, date }, idx) =>
+						E * E > 0.1 && (
+							<mesh position={[x * 4, y * 4 - 0.5, 0]} key={idx}>
+								<meshStandardMaterial
+									transparent
+									opacity={
+										// Fade out the sound source after a certain amount of time
+										(date - oldestTimestamp) / elapsedTime
+									}
+									color={`rgb(${Math.min(
+										255,
+										Math.floor(E * 255 * 3)
+									)}, 0, 255)`}
+								/>
+								{/* sphereBufferGeometry args: [radius, widthSegments, heightSegments] */}
+								<sphereBufferGeometry
+									attach='geometry'
+									args={[E * E, 32, 32]}
+								/>
+							</mesh>
+						)
 				)}
 
 				<Gate active={mobile}>
