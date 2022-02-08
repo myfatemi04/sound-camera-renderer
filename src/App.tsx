@@ -73,6 +73,7 @@ type SoundSourceLocalizationPacket = {
 };
 
 const mobile = isMobileDevice();
+const maxSoundSourceLocalizationEvents = 20;
 
 function App() {
 	const [rotation, setRotation] = useState(0);
@@ -81,9 +82,13 @@ function App() {
 	const [ip, setIp] = useState<string>('');
 	const websocketRef = useRef<WebSocket>();
 
-	const [soundSourceLocalizations, setSoundSourceLocalizations] = useState<
-		SoundSourceLocation[]
+	const [soundSourceLocalizationEvents, setSoundSourceLocalizations] = useState<
+		({ localizations: SoundSourceLocation[]; date: number } | null)[]
 	>([]);
+	const [
+		_soundSourceLocalizationEventCounter,
+		setSoundSourceLocalizationEventCounter,
+	] = useState(0);
 
 	const confirmIp = useCallback(() => {
 		if (websocketRef.current) {
@@ -94,8 +99,24 @@ function App() {
 		websocketRef.current.onmessage = event => {
 			try {
 				const json = JSON.parse(event.data) as SoundSourceLocalizationPacket;
+				const date = Date.now();
 
-				setSoundSourceLocalizations(json.src);
+				let hasVisibleSoundSource = false;
+				json.src.forEach(src => {
+					if (src.E * src.E > 0.1) {
+						hasVisibleSoundSource = true;
+					}
+				});
+
+				if (hasVisibleSoundSource)
+					setSoundSourceLocalizationEventCounter(counter => {
+						setSoundSourceLocalizations(localizations => {
+							const clone = [...localizations];
+							clone[counter] = { localizations: json.src, date };
+							return clone;
+						});
+						return (counter + 1) % maxSoundSourceLocalizationEvents;
+					});
 			} catch (e) {
 				if (!didError) {
 					console.error('Error encountered while parsing JSON.');
@@ -185,6 +206,18 @@ function App() {
 		camera.updateProjectionMatrix();
 	}
 
+	const oldestTimestamp = soundSourceLocalizationEvents.reduce(
+		(acc, curr) => (curr ? Math.min(acc, curr.date) : acc),
+		Date.now()
+	);
+
+	const newestTimestamp = soundSourceLocalizationEvents.reduce(
+		(acc, curr) => (curr ? Math.max(acc, curr.date) : acc),
+		Date.now()
+	);
+
+	const elapsedTime = newestTimestamp - oldestTimestamp;
+
 	return (
 		<div className='App'>
 			<div style={{ display: 'flex' }}>
@@ -206,24 +239,31 @@ function App() {
 			>
 				<Grid />
 
-				{soundSourceLocalizations.map(
-					({ x, y, z, E }, idx) =>
-						E > 0.1 && (
-							<mesh position={[x * 4, y * 4 - 0.5, 0]} key={idx}>
-								<meshStandardMaterial
-									color={`rgba(${Math.min(
-										255,
-										Math.floor(E * 255 * 3)
-									)}, 0, 255, 0.2)`}
-									// color={`rgba(${E * 255}, 255, 255, ${E})`}
-								/>
-								{/* sphereBufferGeometry args: [radius, widthSegments, heightSegments] */}
-								<sphereBufferGeometry
-									attach='geometry'
-									args={[E * E, 32, 32]}
-								/>
-							</mesh>
-						)
+				{soundSourceLocalizationEvents.map(event =>
+					event?.localizations.map(
+						({ x, y, z, E }, idx) =>
+							E * E > 0.1 && (
+								<mesh position={[x * 4, y * 4 - 0.5, 0]} key={idx}>
+									<meshStandardMaterial
+										transparent
+										opacity={
+											// Fade out the sound source after a certain amount of time
+											(event.date - oldestTimestamp) / elapsedTime
+										}
+										color={`rgb(${Math.min(
+											255,
+											Math.floor(E * 255 * 3)
+										)}, 0, 255)`}
+										// color={`rgba(${E * 255}, 255, 255, ${E})`}
+									/>
+									{/* sphereBufferGeometry args: [radius, widthSegments, heightSegments] */}
+									<sphereBufferGeometry
+										attach='geometry'
+										args={[E * E, 32, 32]}
+									/>
+								</mesh>
+							)
+					)
 				)}
 
 				<Gate active={mobile}>
