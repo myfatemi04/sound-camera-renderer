@@ -1,64 +1,11 @@
 import { DeviceOrientationControls, OrbitControls } from '@react-three/drei';
-import {
-	useCallback,
-	useEffect,
-	useLayoutEffect,
-	useRef,
-	useState,
-} from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas } from 'react-three-fiber';
-import { PerspectiveCamera, Vector3 } from 'three';
+import { PerspectiveCamera } from 'three';
 import './App.css';
 import Gate from './Gate';
+import Grid from './Grid';
 import isMobileDevice from './isMobileDevice';
-
-function Line({
-	start,
-	end,
-}: {
-	start: [number, number, number];
-	end: [number, number, number];
-}) {
-	const ref = useRef<any>();
-	useLayoutEffect(() => {
-		ref.current.geometry.setFromPoints(
-			[start, end].map(point => new Vector3(...point))
-		);
-	}, [start, end]);
-	return (
-		<line ref={ref}>
-			<bufferGeometry />
-			<lineBasicMaterial color='hotpink' />
-		</line>
-	);
-}
-
-function Grid() {
-	// This renders a grid on the floor
-	const gridSize = 10;
-	const gridRadius = gridSize / 2;
-	const y = -0.5;
-	return (
-		<>
-			{/* Horizontal lines */}
-			{Array.from({ length: gridSize + 1 }, (_, i) => (
-				<Line
-					key={i}
-					start={[-gridRadius, y, i - gridRadius]}
-					end={[gridRadius, y, i - gridRadius]}
-				/>
-			))}
-			{/* Vertical lines */}
-			{Array.from({ length: gridSize + 1 }, (_, i) => (
-				<Line
-					key={i}
-					start={[i - gridRadius, y, -gridRadius]}
-					end={[i - gridRadius, y, gridRadius]}
-				/>
-			))}
-		</>
-	);
-}
 
 type SoundSourceLocation = {
 	x: number;
@@ -76,14 +23,18 @@ const mobile = isMobileDevice();
 const maxSoundSourceLocalizationEvents = 20;
 
 function App() {
-	const [rotation, setRotation] = useState(0);
 	const [camera] = useState(() => new PerspectiveCamera());
 
 	const [ip, setIp] = useState<string>('');
 	const websocketRef = useRef<WebSocket>();
 
+	type SoundSourceLocalizationEvent = {
+		localizations: SoundSourceLocation[];
+		date: number;
+	};
+
 	const [soundSourceLocalizationEvents, setSoundSourceLocalizations] = useState<
-		({ localizations: SoundSourceLocation[]; date: number } | null)[]
+		(SoundSourceLocalizationEvent | null)[]
 	>([]);
 	const [
 		_soundSourceLocalizationEventCounter,
@@ -101,14 +52,8 @@ function App() {
 				const json = JSON.parse(event.data) as SoundSourceLocalizationPacket;
 				const date = Date.now();
 
-				let hasVisibleSoundSource = false;
-				json.src.forEach(src => {
-					if (src.E * src.E > 0.1) {
-						hasVisibleSoundSource = true;
-					}
-				});
-
-				if (hasVisibleSoundSource)
+				const energySquared = json.src.map(src => src.E * src.E);
+				if (Math.max(...energySquared) > 0.1) {
 					setSoundSourceLocalizationEventCounter(counter => {
 						setSoundSourceLocalizations(localizations => {
 							const clone = [...localizations];
@@ -117,6 +62,7 @@ function App() {
 						});
 						return (counter + 1) % maxSoundSourceLocalizationEvents;
 					});
+				}
 			} catch (e) {
 				if (!didError) {
 					console.error('Error encountered while parsing JSON.');
@@ -132,35 +78,18 @@ function App() {
 		};
 	}, [ip]);
 
-	// Rotation timer
-	useEffect(() => {
-		const rotationTimerId = setInterval(() => {
-			setRotation(r => r + 0.01);
-		}, 10);
-
-		return () => {
-			clearInterval(rotationTimerId);
-		};
-	}, []);
-
 	// Orientation listener
 	useEffect(() => {
-		const listener = (e: DeviceOrientationEvent) => {
-			const { alpha, beta, gamma } = e;
-			// if (alpha && beta && gamma) {
-			// 	camera.setRotationFromEuler(new Euler(alpha, beta, gamma));
-			// }
-			const orientationElement = document.getElementById('orientation')!;
-
+		const listener = ({ alpha, beta, gamma }: DeviceOrientationEvent) => {
+			const el = document.getElementById('orientation')!;
 			if (alpha !== null) {
-				orientationElement.innerHTML = `Orientation: ${alpha} ${beta} ${gamma}`;
+				el.innerHTML = `Orientation: ${alpha} ${beta} ${gamma}`;
 			} else {
-				orientationElement.innerHTML = `No orientation data available`;
+				el.innerHTML = `No orientation data available`;
 			}
 		};
 
 		window.addEventListener('deviceorientation', listener);
-
 		return () => {
 			window.removeEventListener('deviceorientation', listener);
 		};
@@ -169,29 +98,27 @@ function App() {
 	const [orientationPermission, setOrientationPermission] =
 		useState<boolean | null>(null);
 
-	const requestPermission = useCallback(() => {
+	const requestPermission = useCallback(async () => {
 		// DeviceOrientationEvent.requestPermission is an experimental feature that is only available
 		// on iOS 14.5 and above.
 		// @ts-ignore
 		if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-			const result: Promise<'granted' | string> =
-				// @ts-ignore
-				DeviceOrientationEvent.requestPermission();
-			result
-				.then(permissionState => {
-					if (permissionState === 'granted') {
-						setOrientationPermission(true);
-					} else {
-						// Denied
-						document.getElementById('error')!.innerHTML =
-							'Orientation permission state: ' + permissionState;
-						setOrientationPermission(false);
-					}
-				})
-				.catch(e => {
-					// Errored
+			try {
+				const permissionState =
+					// @ts-ignore
+					await DeviceOrientationEvent.requestPermission();
+
+				if (permissionState === 'granted') {
+					setOrientationPermission(true);
+				} else {
+					// Denied
+					const el = document.getElementById('error')!;
+					el.innerHTML = `Orientation permission state: ${permissionState}`;
 					setOrientationPermission(false);
-				});
+				}
+			} catch (e) {
+				setOrientationPermission(false);
+			}
 		}
 	}, []);
 
@@ -206,16 +133,12 @@ function App() {
 		camera.updateProjectionMatrix();
 	}
 
-	const oldestTimestamp = soundSourceLocalizationEvents.reduce(
-		(acc, curr) => (curr ? Math.min(acc, curr.date) : acc),
-		Date.now()
-	);
+	const timestamps = soundSourceLocalizationEvents
+		.filter(e => e !== null)
+		.map(e => e!.date);
 
-	const newestTimestamp = soundSourceLocalizationEvents.reduce(
-		(acc, curr) => (curr ? Math.max(acc, curr.date) : acc),
-		Date.now()
-	);
-
+	const oldestTimestamp = Math.min(...timestamps);
+	const newestTimestamp = Math.max(...timestamps);
 	const elapsedTime = newestTimestamp - oldestTimestamp;
 
 	return (
@@ -275,12 +198,6 @@ function App() {
 
 				<pointLight position={[10, 10, 10]} />
 				<ambientLight />
-				<Gate>
-					<mesh rotation={[rotation, rotation, 0]} position={[0, 0, 0]}>
-						<meshStandardMaterial color='red' />
-						<boxBufferGeometry attach='geometry' args={[0.5, 0.5, 0.5]} />
-					</mesh>
-				</Gate>
 			</Canvas>
 		</div>
 	);
