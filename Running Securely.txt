@@ -3,3 +3,5 @@ To do this, install the CloudFlare Tunnels CLI (brew install cloudflare/cloudfla
 Then, run `cloudflared tunnel --url http://localhost:3000` (or whatever port you're using)
 
 Finally, you can open it on Safari on your iPhone. Just make sure you use the https: version of the Cloudflare Tunnel.
+
+When you want to use it with the actual sound camera, you will need to set up another tunnel for the broadcasting server, because insecure WebSockets cannot be accessed from secure hosts.

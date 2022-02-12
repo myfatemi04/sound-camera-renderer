@@ -32,7 +32,8 @@ function App() {
 			websocketRef.current.close();
 		}
 		let didError = false;
-		websocketRef.current = new WebSocket(`ws://${ip}`);
+		let secure = !(ip.startsWith('1') || ip.startsWith('2'));
+		websocketRef.current = new WebSocket(`${secure ? 'wss' : 'ws'}://${ip}`);
 		websocketRef.current.onmessage = event => {
 			try {
 				const json = JSON.parse(event.data) as SoundSourceLocalizationPacket;
