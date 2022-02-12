@@ -38,7 +38,7 @@ function App() {
 				const json = JSON.parse(event.data) as SoundSourceLocalizationPacket;
 				const date = Date.now();
 				for (const src of json.src) {
-					if (src.E * src.E > 0.1) {
+					if (src.E * src.E > 0.02) {
 						localizations.addItem({ date, ...src });
 					}
 				}

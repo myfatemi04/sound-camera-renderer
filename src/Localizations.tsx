@@ -1,6 +1,10 @@
 import nonMaximumSuppression from './nonMaximumSuppression';
 import { SoundSourceLocalizationWithDate } from './types';
 
+function sigmoid(x: number) {
+	return 1 / (1 + Math.exp(-x));
+}
+
 export default function Localizations({
 	localizations,
 }: {
@@ -11,13 +15,13 @@ export default function Localizations({
 	const oldestTimestamp = Math.min(...timestamps);
 	const newestTimestamp = Math.max(...timestamps);
 	const elapsedTime = newestTimestamp - oldestTimestamp;
-	const suppressedItems = nonMaximumSuppression(localizations, 0);
+	const suppressedItems = nonMaximumSuppression(localizations, 1);
 
 	return (
 		<>
 			{suppressedItems.map(
 				({ x, y, z, E, date }, idx) =>
-					E * E > 0.1 && (
+					E * E > 0.02 && (
 						<mesh position={[x * 4, y * 4 - 0.5, 0]} key={idx}>
 							<meshStandardMaterial
 								transparent
@@ -28,7 +32,10 @@ export default function Localizations({
 								color={`rgb(${Math.min(255, Math.floor(E * 255 * 3))}, 0, 255)`}
 							/>
 							{/* sphereBufferGeometry args: [radius, widthSegments, heightSegments] */}
-							<sphereBufferGeometry attach='geometry' args={[E * E, 32, 32]} />
+							<sphereBufferGeometry
+								attach='geometry'
+								args={[sigmoid(E - 0.5) * 0.3, 32, 32]}
+							/>
 						</mesh>
 					)
 			)}
