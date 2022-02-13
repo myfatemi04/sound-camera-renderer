@@ -22,7 +22,7 @@ export default function Localizations({
 			{suppressedItems.map(
 				({ x, y, z, E, date }, idx) =>
 					E * E > 0.02 && (
-						<mesh position={[x * 4, y * 4 - 0.5, 0]} key={idx}>
+						<mesh position={[x * 2, y * 2, z * 2]} key={idx}>
 							<meshStandardMaterial
 								transparent
 								opacity={
@@ -34,7 +34,7 @@ export default function Localizations({
 							{/* sphereBufferGeometry args: [radius, widthSegments, heightSegments] */}
 							<sphereBufferGeometry
 								attach='geometry'
-								args={[sigmoid(E - 0.5) * 0.3, 32, 32]}
+								args={[sigmoid(E - 0.5) * 0.15, 32, 32]}
 							/>
 						</mesh>
 					)

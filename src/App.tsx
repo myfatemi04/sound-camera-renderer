@@ -1,7 +1,7 @@
 import { DeviceOrientationControls, OrbitControls } from '@react-three/drei';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas } from 'react-three-fiber';
-import { PerspectiveCamera } from 'three';
+import { Euler, PerspectiveCamera, Vector3 } from 'three';
 import './App.css';
 import Gate from './Gate';
 import Grid from './Grid';
@@ -38,9 +38,25 @@ function App() {
 			try {
 				const json = JSON.parse(event.data) as SoundSourceLocalizationPacket;
 				const date = Date.now();
+				const cameraFlippedRotation = new Euler(
+					camera.rotation.x,
+					camera.rotation.y,
+					camera.rotation.z,
+					camera.rotation.order
+				);
 				for (const src of json.src) {
 					if (src.E * src.E > 0.02) {
-						localizations.addItem({ date, ...src });
+						// Slide plane a bit forward
+						let vector = new Vector3(src.x, src.y, -1);
+						// apply inverse of camera rotation
+						vector = vector.applyEuler(cameraFlippedRotation);
+						localizations.addItem({
+							date,
+							x: vector.x,
+							y: vector.y,
+							z: vector.z,
+							E: src.E,
+						});
 					}
 				}
 			} catch (e) {
@@ -56,7 +72,7 @@ function App() {
 				}
 			}
 		};
-	}, [ip, localizations]);
+	}, [camera, ip, localizations]);
 
 	// Orientation listener
 	useEffect(() => {
@@ -80,8 +96,8 @@ function App() {
 
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 
-	camera.fov = 135;
-	camera.position.set(0, 0, 2);
+	camera.fov = 90;
+	camera.position.set(0, 0, 0);
 	if (canvasRef.current) {
 		const canvas = canvasRef.current;
 		const rect = canvas.getBoundingClientRect();
