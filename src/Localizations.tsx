@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import nonMaximumSuppression from './nonMaximumSuppression';
 import { SoundSourceLocalizationWithDate } from './types';
 
@@ -7,15 +8,24 @@ function sigmoid(x: number) {
 
 export default function Localizations({
 	localizations,
+	renderCallback,
 }: {
 	localizations: SoundSourceLocalizationWithDate[];
+	renderCallback: (
+		renderedLocalizations: SoundSourceLocalizationWithDate[]
+	) => void;
 }) {
 	const timestamps = localizations.filter(e => e !== null).map(e => e!.date);
 
 	const oldestTimestamp = Math.min(...timestamps);
 	const newestTimestamp = Math.max(...timestamps);
 	const elapsedTime = newestTimestamp - oldestTimestamp;
-	const suppressedItems = nonMaximumSuppression(localizations, 1);
+	const suppressedItems = nonMaximumSuppression(localizations, 0);
+
+	useEffect(
+		() => renderCallback(suppressedItems),
+		[renderCallback, suppressedItems]
+	);
 
 	return (
 		<>

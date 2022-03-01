@@ -17,6 +17,18 @@ import useRollingArray from './useRollingArray';
 const mobile = isMobileDevice();
 const maxSoundSourceLocalizationEvents = 20;
 
+// @ts-ignore
+window.localizations = [];
+
+function renderLocalizationsCallback(
+	localizations: SoundSourceLocalizationWithDate[]
+) {
+	// @ts-ignore
+	window.localizations.push(localizations);
+}
+
+function noop() {}
+
 function App() {
 	const [camera] = useState(() => new PerspectiveCamera());
 
@@ -26,6 +38,8 @@ function App() {
 	const localizations = useRollingArray<SoundSourceLocalizationWithDate>(
 		maxSoundSourceLocalizationEvents
 	);
+
+	const [recording, setRecording] = useState(false);
 
 	const confirmIp = useCallback(() => {
 		if (websocketRef.current) {
@@ -110,6 +124,17 @@ function App() {
 			<div style={{ display: 'flex' }}>
 				<input type='text' onChange={e => setIp(e.target.value)} />
 				<button onClick={confirmIp}>Confirm IP</button>
+				<button
+					onClick={() => {
+						if (!recording) {
+							// @ts-ignore
+							window.localizations = [];
+						}
+						setRecording(!recording);
+					}}
+				>
+					{recording ? 'Stop Recording' : 'Start Recording'}
+				</button>
 			</div>
 			<Gate active>
 				{orientationPermission == null && (
@@ -126,7 +151,10 @@ function App() {
 			>
 				<Grid />
 
-				<Localizations localizations={localizations.items} />
+				<Localizations
+					localizations={localizations.items}
+					renderCallback={recording ? renderLocalizationsCallback : noop}
+				/>
 
 				<Gate active={mobile}>
 					<DeviceOrientationControls camera={camera} />
